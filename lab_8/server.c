@@ -13,7 +13,7 @@ int main()
 {
     int server_sockfd, client_sockfd;
     int server_len;
-    socklen_t clientLen;
+    socklen_t client_len;
     struct sockaddr_un server_address;
     struct sockaddr_un client_address;
  
