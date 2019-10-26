@@ -5,4 +5,5 @@ echo "This is the second input you chose: $2"
 
 echo "$1 and $2"
 
-
+read -p "Enter a username:" USER
+echo "The username is " $USER
