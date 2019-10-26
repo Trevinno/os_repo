@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <stdlib.h>
  
 int main()
 {
