@@ -1,0 +1,312 @@
+    Laboratorio de                            
+             Sistemas Operativos
+Autor: Dr. Juan A. Nolazco Flores  Co-autores: M.C. Roberto Aceves, M.C. Jorge Villaseñor, Ing. Raúl Fuentes, J.I. icaza
+
+
+
+
+Práctica 9: Sistema de Archivos
+
+Objetivo
+En esta práctica seguimos con los temas de desarrollo de aplicaciones en ambiente GNU/Linux pero en esta ocasión nos enfocamos más en la definición de “Archivo”. Como recordarán hemos hecho mucho énfasis en que en Linux “todo es un archivo” y esto requiere especial atención para adentrarse con el hardware o con otros elementos. Por lo anterior, en esta ocasión nos enfocaremos en cómo se maneja internamente el sistema de archivos en un S.O. GNU/Linux.
+
+ÍNDICE
+Objetivo
+Tipos de Archivos
+Archivos Regulares
+Directorios
+Enlaces (hard and soft links)
+Archivos especiales
+otroTree.c, Desplegando el tipo de archivo.
+Arquitectura del Sistema Operativo
+Arquitectura del sistema de archivos
+Descriptores de archivos e I-Node
+File descriptors.
+i-Node
+Estado1.c
+Tablas de control de acceso a los archivos.
+Copiar.c
+Laboratorio
+Ejercicio 1
+Ejercicio 2
+Ejercicio 3
+Conclusiones
+Referencias:
+
+Nota - Además de los ejercicios indicados en la sección “Laboratorio”, el formulario incluirá algunas preguntas sobre la arquitectura del sistema de archivos
+Tipos de Archivos 
+"Archivo" es el concepto más básico y fundamental de Linux, y no necesariamente se refiere a lo que normalmente conocemos  como “archivos en disco”. Linux trata a los dispositivos y periféricos (terminales, teclados, unidad USB, CD roms, etc.) y además los directorios y las líneas de comunicación entre procesos  como si fueran archivos (everything is a file philosophy). 
+
+System programming en Linux consiste en parte en abrir, leer, escribir, cerrar y administrar archivos. Cada archivo abierto en un programa cuenta con una agarradera (handle) interior que se llama descriptor de archivo. Ya conocimos estos descriptores en prácticas anteriores, en donde los utilizamos para hacer referencia a archivos en disco o a comunicación entre procesos. Pero, no se debe confundirlos con los “file pointers” que se utilizan en el standard I/O.
+ 
+El descriptor de archivo es un entero utilizado dentro del Núcleo (Kernel) para referenciar un archivo. Estos descriptores de archivo se comparten con el espacio de usuario, de tal forma que son utilizados directamente por los programas de un usuario para accesar archivos. Pero no identifican en forma única un archivo en disco - para ello se utiliza el i-node, como veremos más adelante.
+
+Archivos Regulares
+Lo que la mayoría de nosotros llamamos “archivo” es lo que linux etiqueta como archivos regulares. Un archivo regular contiene bytes de datos, organizados en un arreglo lineal llamado flujo de bytes (byte stream). Ejemplos de estos son los archivos de texto, documentos generados por alguna suite de oficina, archivos ejecutables, archivos en disco etc.
+
+Archivos especiales
+Archivos de dispositivos basados en caracteres, como el “archivo” teclado,
+Pipes, que como sabemos se utilizan para ligar la salida (standard out) de un programa con la entrada (standard in) de otro y 
+Sockets, que se utilizan para inter-comunicar procesos que pueden residir en la misma o diferentes máquinas.
+
+
+Directorios
+Actúan como un contenedor para otros archivos y directorios; en otros ambientes suelen llamarse “folders”. Un directorio es en sí un archivo, que contiene una  lista de nombres de otros archivos o directorios contenidos dentro del directorio,. Cuando un archivo se refiera a un archivo en disco, cada uno de estos nombres está a su vez asociado con un número de nodo-i (i-node), que es un identificador del archivo interno al kernel y que identifica en forma única un archivo en disco; es decir, entre todos los usuarios que pueden accesar al servidor linux en cualquier momento, un mismo archivo en disco tendría el mismo i-node, que el kernel mapearía al descriptor de archivo de cada usuario. 
+ 
+Los directorios son los archivos que nos permiten darle una estructura jerárquica a los sistemas de archivos de Linux; por ejemplo el sistema o conjunto de archivos que reside en una partición de un disco duro o un USB.
+
+La función fundamental de un directorio es establecer la relación que existe entre el nombre de cada archivo contenido dentro del directorio, y el número de nodo-i correspondiente al archivo
+
+Los directorios residen como archivos ordinarios dentro del sistema de archivos.
+Pueden ser leídos como archivos ordinarios.
+No se pueden crear o escribir sobre ellos como archivos ordinarios (el kernel los protege por razones de seguridad).
+ 
+La información de un directorio puede obtenerse a través de la llamada al sistema: readdir(), o la llamada al sistema stat() para investigar si se trata de un subdirectorio dentro de un directorio.
+
+Enlaces (hard and soft links)
+Un enlace o link es un nombre dentro de un directorio, que internamente apunta a un  nodo-i que puede corresponder a un archivo en el mismo directorio o en otro. (En windows, cuando el link apunta a otro archivo, se le llama shortcut). La diferencia entre un enlace hard y un enlace soft es que el enlace hard no puede cruzar (se invalida) entre diferentes sistemas de archivos (por ejemplo tal enlace dentro del sistema de archivos del disco duro no puede apuntar otro archivo dentro del sistema de archivos de un USB). En cambio, un enlace soft puede apuntar a cualquier lado, incluyendo archivos y directorios que residen en diferentes sistemas de archivos. 
+
+Los archivos en disco están basados en bloques. En los dispositivos de modo bloque hay un buffer que mejora enormemente la velocidad de transferencia. Un mismo dispositivo puede ser accedido de modo bloque o de modo carácter dependiendo del “driver” utilizado. 
+ 
+
+otroTree.c, Desplegando el tipo de archivo.
+
+/*** PROGRAMA:otroTree.c
+FORMA DE USO:
+   otroTree [opciones] <nombre_directorio> [ <nombre_directorio> ... ]
+   (opciones)
+        -f mostrar los archivos que hay dentro de
+            Un directorio agregando:
+       (d) directorio
+       (o) archivo ordinario
+       (b) archivo especial modo bloque
+       (c) archivo especial modo caracter
+       (p) fifo
+       (x) archivo ejecutable
+VALOR DE RETORNO:
+   0: si se ejecuta correctamente.
+   -1: si se produce algun error. ***/
+ 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <string.h>
+struct opciones
+{
+     unsigned mostrar_archivos:1;
+};
+ 
+enum Boolean {NO,SI};
+void otroTree(char *path, struct opciones opciones);
+ 
+/*** FUNCION: main
+   DESCRIPCION
+    Funcion principal , se encarga de analizar los argumentos
+    De la linea de ordenes y de invocar a la funcion otroTree.***/
+int main (int argc, char *argv[])
+{
+   struct opciones opciones;
+   int i, j;
+ 
+   /*Analisis de los argumentos en la linea de ordenes.*/
+   if (argc<2)
+   {
+       fprintf (stderr,"Forma de uso: otroTree [-f] nombre_directorio\n");
+       exit (-1);
+   }
+ 
+   for (i=1;i<argc;i++)
+      if (argv[i][0] =='-')
+          for (j=1;argv[i][j]!=0;j++)
+              switch (argv[i][j])
+              {
+                 case 'f':
+                    opciones.mostrar_archivos= SI;
+                    break;
+                 default:    
+                    fprintf(stderr, "Opcion [-%c] desconocida \n",argv[i][j]);
+              }
+ 
+    /*Analisis de la estructura en arbol de directorios para cada uno
+      de los argumentos que aparecen en la linea de ordenes y que no
+      son opciones de otroTree.*/
+    for (i=1;i<argc;i++)
+      if (argv [i][0]!='-')
+         otroTree (argv[i],opciones);
+ 
+              return 0;
+}
+ 
+/*** FUNCION: otroTree
+       DESCRIPCION:
+       Esta funcion recibe el path name de un directorio  se encarga de
+                            analizarlo. Si en el directorio hay subdirectorios, la funcion se
+       llama de forma recursiva para analizar ese subdirectorio.
+       Segun las opciones que esten activas, la función desplegara por
+       pantalla un tipo de informacion u otra.
+***/
+void otroTree(char *path, struct opciones opciones)
+{
+     DIR *dirp;
+     struct dirent *dp;
+     static unsigned int nivel = 0;
+     struct stat buf;
+     int ok;
+     int i;
+     char archivo [256];
+     char tipo_archivo;
+ 
+   /*Apertura de directorio.*/
+   if ((dirp=opendir(path)) == NULL)
+   {
+      perror(path);
+      return;
+   };
+  
+   /*Leemos, una por una, las restantes entradas del directorio.*/
+   while ((dp=readdir(dirp))!=NULL)
+   {
+                            /*Formamos el path name correspondiente al archivo de la entrada de
+                              directorio que estamos procesando*/
+       sprintf(archivo,"%s/%s",path, dp->d_name);
+ 
+       /*Lectura del inode del archivo. */
+       ok=stat(archivo,&buf);
+      
+       /*Si el archivo es un subdirectorio, llamamos nuevamente a otroTree.*/
+       if (ok!=-1 && (buf.st_mode & S_IFMT) == S_IFDIR)
+       {
+              for (i=0;i<nivel;i++)
+                  printf("\t");
+                 printf ("%s %s \n",dp->d_name, opciones.mostrar_archivos ? "(d)":"");
+
+            /* Si es referencia a "este directorio" (.) o el "directiorio padre" (..), saltar) */
+           if (!strcmp(".", dp->d_name) || !strcmp("..", dp->d_name))
+                continue;   
+
+                 ++nivel;
+                 otroTree(archivo,opciones);
+              --nivel;
+        }
+                  /* Si el archivo no es un directorio y esta activa la opcion
+                                Mostrar_archivos (-f), presentamos por pantalla el nombre del
+                                archivo y su tipo.*/
+         else {
+                   if (ok !=-1 && opciones.mostrar_archivos== SI) {
+                      for (i=0;i<nivel;i++)
+                          printf ("\t");
+                      switch (buf.st_mode & S_IFMT)
+                      {
+                    case S_IFREG:
+                           if (buf.st_mode & 0111)
+                        tipo_archivo = 'x';
+                               else
+                               tipo_archivo = 'o';
+                            break;
+                      case S_IFCHR:
+                             tipo_archivo = 'c';
+                             break;
+                      case S_IFBLK:
+                             tipo_archivo = 'b';
+                             break;
+                      case S_IFIFO:
+                             tipo_archivo = 'p';
+                             break;
+                      default:
+                             tipo_archivo = '?';
+                     } //switch
+                fprintf(stdout,"(%c) %s \n", tipo_archivo, dp->d_name);
+            }else 
+                    fprintf(stdout," %s \n", dp->d_name);
+                }
+   } /* while */
+   closedir(dirp);
+} /* otroTree */
+
+Primero se compila para obtener el programa ejecutable utilizando el siguiente comando:
+[user@localhost home]$ gcc –o otroTree otroTree.c
+ 
+Después, se ejecuta como si fuera un comando:
+
+
+[user@localhost home]$ ./otroTree hola
+
+hola1
+     hola11
+     hola12
+
+hola2
+[user@localhost home]$ ./otroTree -f hola 
+
+hola1 (d)
+     (o) h1
+     hola11 (d)
+     hola12 (d)
+hola2 (d)
+     (o) h2
+(o) h
+
+Du - estimate file space usage
+El comando  du  (disk ussage) nos dice cuánto espacio (en bloques) utiliza cada directorio. Si deseas verlo en formato entendible por el humano usa la opción -h .
+
+
+[user@localhost home]$ du
+22      ./Finales/al149830
+18      ./Finales/al246793
+14      ./Finales/al158072
+170     ./Finales/al171574
+10      ./Finales/al171465
+50      ./Finales/al501240
+16      ./Finales/al501747
+16      ./Finales/al177269
+320     ./Finales
+72      ./CyUnixAvanzado
+10      ./pruebas
+402                .
+
+ 
+El valor mostrado indica cuántos bloques poseen los archivos en el directorio indicado en la línea de comandos del du (default: el directorio local) incluyendo subdirectorios y el mismo directorio (en el ejemplo, el directorio local ocupa 402 bloques incluyendo todos sus subdirectorios y archivos). 
+
+Los bloques son importantes pues son la referencia directa a los clusters del disco duro donde se almacenan (o los bloques en memorias flash); sin embargo, nosotros estamos acostumbrados a  ver el tamaño en términos  de Bytes y es posible lograrlo con el argumento -h.
+
+Arquitectura del Sistema Operativo
+Linux es propiamente el Kernel de un sistema UNIX;  por lo mismo tiene una arquitectura heredada de Unix y de  la cual mantiene su sencillez. Es una arquitectura de capas  que posee 3 elementos:
+Capa de hardware
+Capa de Kernel
+Capa de Usuario
+
+Al ser un sistema jerárquico y de capas, toda la comunicación  hacia el hardware debe de pasar por la capa de Kernel (y es en este punto donde está el control y la seguridad). La siguiente imagen ayudará a su apreciación:
+
+
+
+Una distribución de linux o distro, tal como Ubuntu o Fedora, agrega al Kernel un shell, un conjunto de comandos, una interfase tipo GUI y varias aplicaciones útiles; pero todas las distribuciones utilizan básicamente el mismo Kernel, que ha sido desarrollado y mantenido durante muchos años por una extensa comunidad encabezada por Linus Torvald. 
+
+Durante las prácticas pasadas ya hemos estudiado el manejo de las  librerías de GNU ya que se trata de  las herramientas proveídas en cualquier distro basado en Linux (Ubuntu, Fedora, Red-hat , Arch, etc...) y se trata de  comandos como cd, awk, ls, rm, tar, rsync, etc... que pueden formar parte de shell scripts. Cuando usamos cualquier comando tal como  “rm -f /”,  el Kernel valída primero los privilegios y permisos del usuario que lo manda a ejecutar antes de realizar la acción. Con el comando mostrado en particular, seguramente no lo realizará pues a excepción de Root nadie tiene control del directorio raíz, /. (Por cierto, ese comando tiende a ser una broma pesada en los foros de Linux ya que borra absolutamente todo...). 
+
+Además ya hemos manipulado la interacción con el hardware al crear programas que copian archivos dentro del disco duro, ya sea directamente con los comandos read y write o utilizando librerías de usuario (standard I/O). En ambos casos,  es el Kernel quien toma el control., sin embargo a momentos distintos: esto se puede apreciar  con la siguiente imagen donde se vuelven a marcar las 3 capas pero desplegando más ampliamente las acciones que se realizan: 
+
+
+La diferencia entre los dos radica en lo que se vio en una práctica anterior referente a I/O System Programming.
+Arquitectura del sistema de archivos 
+Linux proporciona un espacio de nombres de archivos y directorios global (aplicable a múltiples dispositivos) y unificado (el mismo para diferentes dispositivos). En un espacio de nombres unificado:
+El acceso a los archivos en discos o unidades diferentes se realiza siempre dentro de un espacio de nombres unificado, es decir, todos los archivos son accesibles dentro de la misma y única jerarquía de directorios.
+
+En Windows, un archivo en una memoria USB podría ser accesible mediante la ruta F:\plank.jpg, mientras que en el disco duro está ubicado en C:\; en Linux en cambio, ambos tipos de archivo se accederían con un “path” del mismo tipo, que podría ser por ejemplo /media/usbdisp/palnk.jpg para el caso del usb o /home/user/fulano/plank.jpg. Lo que ha sucedido es que el sistema de archivos completo del USB se ha “montado” en usbdisp mediante el comando “mount”, y entonces se hace visible como un directorio cualquiera.  
+
+
+
+Un sistema de archivos:
+Es una colección de archivos y directorios en una jerarquía válida y formal.
+Los sistemas de archivos pueden ser agregados y removidos individualmente del espacio de nombres global de archivos y directorios (“mount” y “unmount”)
+Linux también soporta sistemas de archivos virtuales que existen sólo en memoria, y sistemas de archivos de red que existen en máquinas a través de la red.
+Los sistemas de archivos físicos residen en dispositivos de almacenamiento en bloque, como CDs, unidades flash, tarjetas compact flash, o discos duros. Algunos de estos dispositivos son divisibles en particiones, lo que significa que pueden ser divididos en múltiples sistemas de archivos, los cuales pueden ser manipulados individualmente.
+
+La unidad direccionable más pequeña en un dispositivo de bloque es el sector.
+El sector es una característica física del dispositivo. El tamaño de los sectores es casi siempre una potencia de dos; por ejemplo, 512 bytes es muy común. Un dispositivo de bloque no puede transferir o accesar una unidad de datos más pequeña que un sector; todas las operaciones de I/O ocurren en términos de uno o más sectores. Para una de las superficies de un disco duro, el sector se vería como sigue:
+
+
+
+Igualmente, la unidad lógica direccionable más pequeña en un sistema de archivos es el bloque.
+El bloque es una abstracción del sistema de archivos, no del medio físico donde el sistema de archivos reside. Un bloque es usualmente un múltiplo del tamaño de sector. Los bloques son generalmente más grandes que el sector, pero deben ser menores que el tamaño de página (la unidad más pequeña direccionable por la unidad de memoria, un componente del hardware). Tamaños comunes de bloque son 512 bytes, 1 kilobyte y 4 kilobytes.
