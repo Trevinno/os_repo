@@ -41,8 +41,8 @@ int main(int argc, char *argv[])
                  fprintf(stdout,"Num. descriptor del destino %d\n", fd_destino);
  
                  /* copiamos el archivo origen en el archivo destino. */
-                 while ((nbytes=read(fd_origen, buffer, sizeof buffer))> 0)
-                                 write(fd_destino, buffer, nbytes);
+                 while ((nbytes=fread(fd_origen, buffer, sizeof buffer))> 0)
+                                 fwrite(fd_destino, buffer, nbytes);
  
                  close(fd_origen);
                  close(fd_destino);
